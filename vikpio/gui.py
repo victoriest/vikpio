@@ -4,13 +4,12 @@ from Tkinter import *
 from tkFont import Font as tk_font
 import threading
 import time
-import queue
 import random
 
 
-# from vikpio.senor.dht11.dht11_reader import DHT11SensorReader
-# from vikpio.senor.bmp085.bmp085 import BMP085SensorReader
-# from vikpio.senor.pm25.pm25 import Pm25SensorReader
+from senor.dht11.dht11_reader import DHT11SensorReader
+from senor.bmp085.bmp085 import BMP085SensorReader
+from senor.pm25.pm25 import Pm25SensorReader
 
 
 class Data:
@@ -28,6 +27,24 @@ def time_now():
 
 def days_now():
     return str(time.strftime('%Y/%b/%d %a', time.localtime(time.time())))
+
+
+
+def get_data(is_test=False):
+    data = Data()
+    if is_test:
+        data.pm10 = random.randrange(200, 2000)
+        data.pm25 = random.randrange(100, 1800)
+        data.hu = random.uniform(50.0, 100.0)
+        data.tp = random.uniform(18.0, 25.0)
+        data.pressure = random.uniform(101325.0 - 100, 101325.0 + 100)
+    else:
+        data.pm10 = Pm25SensorReader.PM_10_VALUE
+        data.pm25 = Pm25SensorReader.PM_2_5_VALUE
+        data.hu = DHT11SensorReader.HUMIDITY_VALUE
+        data.tp = BMP085SensorReader.TEMPERATURE_VALUE
+        data.pressure = BMP085SensorReader.PRESSURE_VALUE
+    return data
 
 
 root = Tk()
@@ -91,36 +108,30 @@ labelA.grid(row=4, column=2, columnspan=2, rowspan=1, sticky='wens', padx=2, pad
 
 thread_lock = threading.Lock()
 
-# pm25_sensor_reader = Pm25SensorReader(locker=thread_lock)
-# pm25_sensor_reader.start()
-# bmp_sensor_reader = BMP085SensorReader(locker=thread_lock)
-# bmp_sensor_reader.start()
-# dht11_sensor_reader = DHT11SensorReader(locker=thread_lock)
-# dht11_sensor_reader.start()
+pm25_sensor_reader = Pm25SensorReader(locker=thread_lock)
+pm25_sensor_reader.start()
+bmp_sensor_reader = BMP085SensorReader(locker=thread_lock)
+bmp_sensor_reader.start()
+dht11_sensor_reader = DHT11SensorReader(locker=thread_lock)
+dht11_sensor_reader.start()
 
 
 q = []
 
 
-def random_data_for_test():
-    data = Data()
-    data.pm10 = random.randrange(200, 2000)
-    data.pm25 = random.randrange(100, 1800)
-    data.hu = random.uniform(50.0, 100.0)
-    data.tp = random.uniform(18.0, 25.0)
-    data.pressure = random.uniform(101325.0 - 100, 101325.0 + 100)
-    return data
-
-
-for i in range(86400):
-    q.append(random_data_for_test())
-
+# for i in range(86400):
+#     q.append(get_data(True))
 
 def clock():
     label1.configure(text=time_now())
     label4.configure(text=days_now())
 
-    d = random_data_for_test()
+    d = get_data()
+
+    if d.pm10 > 3000 or d.pm25 > 3000:
+        root.after(1000, clock)
+        return
+
     q.append(d)
     if len(q) > 86400:
         q.pop(0)
@@ -148,7 +159,7 @@ def show_chart(fuc):
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     import matplotlib.pyplot as plt
 
-    f = plt.figure(figsize=(5, 4))
+    f = plt.figure(figsize=(3, 2))
     plt.subplot(111)
 
     data = []
@@ -156,12 +167,20 @@ def show_chart(fuc):
 
     n = 0
     avg = 0
+    step = len(q) / 96
+    if step is 0:
+        step = 1
     for i, val in enumerate(q):
-        if n > 720:
+        if n >= step and avg is not 0:
             ti.append(i)
-            data.append(avg / n)
+            data.append(avg / step)
+
+            print step, n, i, avg/step
             n = 0
             avg = 0
+        # elif n is 0:
+        #     ti.append(i)
+        #     data.append(fuc(val))
         avg += fuc(val)
         n += 1
 
@@ -177,7 +196,7 @@ def show_chart(fuc):
 
     canvas = FigureCanvasTkAgg(f, master=root)
     canvas.draw()
-    canvas.get_tk_widget().pack(expand=1)
+    canvas.get_tk_widget().grid(row=0, column=0, sticky=N + S + E + W)
 
     def on_button_press_event(event):
         canvas.get_tk_widget().destroy()
