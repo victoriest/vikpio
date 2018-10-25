@@ -4,29 +4,28 @@ import RPi.GPIO as GPIO
 import dht11
 import time
 
-dht11_humidity_value = 0
-
 
 class DHT11SensorReader(threading.Thread):
-    def __init__(self, pin=38, locker=None):
+    HUMIDITY_VALUE = 0
+
+    def __init__(self, locker=None, pin=38):
         threading.Thread.__init__(self)
         self._pin = pin
         self._locker = locker
 
     def run(self):
-        global dht11_humidity_value
         try:
             GPIO.setwarnings(False)
             GPIO.setmode(GPIO.BOARD)
             GPIO.cleanup()
-            dht = dht11.DHT11(pin=38)
+            dht = dht11.DHT11(pin=self._pin)
             while 1:
                 result = dht.read()
 
                 if self._locker is not None:
                     self._locker.acquire()
                 if result.is_valid():
-                    dht11_humidity_value = result.humidity
+                    DHT11SensorReader.HUMIDITY_VALUE = result.humidity
                     # label7.configure(text=("%d%%" % result.humidity))
                 if self._locker is not None:
                     self._locker.release()
